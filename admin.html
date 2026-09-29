@@ -219,11 +219,13 @@ function endSave(ui){
   if(ui?.note)ui.note.classList.remove("show");
 }
 async function upload(f,folder){if(!f)return null;let ext=f.name.split(".").pop()||"jpg",path=`${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;let {error}=await sb.storage.from("restaurant-images").upload(path,f);if(error)throw error;return sb.storage.from("restaurant-images").getPublicUrl(path).data.publicUrl}
+function storagePathFromUrl(url){if(!url)return null;try{const u=new URL(url);const marker="/storage/v1/object/public/restaurant-images/";const i=u.pathname.indexOf(marker);return i<0?null:decodeURIComponent(u.pathname.slice(i+marker.length))}catch{return null}}
+async function removeStoredImage(url){const path=storagePathFromUrl(url);if(!path)return;const {error}=await sb.storage.from("restaurant-images").remove([path]);if(error)console.warn("تعذر حذف الصورة القديمة من Storage:",error.message)}
 async function saveCat(x){
   x.preventDefault();
   const ui=beginSave(x.currentTarget,"جاري حفظ القسم...");
   try{
-    let im=edit?.cover_image||null,f=$("#ci").files[0];
+    let oldImage=edit?.cover_image||null,im=oldImage,f=$("#ci").files[0];
     if(f){im=await upload(f,"categories")}
     saveStage(ui,"⏳ جاري حفظ القسم…");
     let nextOrder=cats.length?Math.max(...cats.map(c=>Number(c.sort_order)||0))+1:1;
@@ -231,6 +233,7 @@ async function saveCat(x){
         q=edit?sb.from("categories").update(v).eq("id",edit.id):sb.from("categories").insert(v),
         {error}=await q;
     if(error)throw error;
+    if(f&&oldImage&&oldImage!==im)await removeStoredImage(oldImage);
     saveStage(ui,"✓ تم حفظ القسم بنجاح");
     msg("✓ تم حفظ القسم بنجاح");
     await loadCats();
@@ -241,7 +244,7 @@ async function saveCat(x){
     msg("خطأ: "+z.message);
   }
 }
-window.delCat=async id=>{if(!confirm("حذف القسم وكل أصنافه؟"))return;let {error}=await sb.from("categories").delete().eq("id",id);error?msg(error.message):loadCats()};
+window.delCat=async id=>{if(!confirm("حذف القسم وكل أصنافه؟"))return;const c=cats.find(x=>String(x.id)===String(id));let {data:its}=await sb.from("menu_items").select("image_url").eq("category_id",id);let {error}=await sb.from("categories").delete().eq("id",id);if(error)return msg(error.message);await Promise.allSettled([removeStoredImage(c?.cover_image),...(its||[]).map(i=>removeStoredImage(i.image_url))]);msg("✓ تم حذف القسم وصوره");loadCats()};
 function showHome(push=true){
  $("#itemsPane").classList.add("hide");$("#unavailablePane").classList.add("hide");$("#catsPane").classList.remove("hide");
  if(push)history.pushState({view:"home"},"","#home");
@@ -317,13 +320,14 @@ async function saveItem(x){
   x.preventDefault();
   const ui=beginSave(x.currentTarget,"جاري حفظ الصنف...");
   try{
-    let im=edit?.image_url||null,f=$("#ii").files[0];
+    let oldImage=edit?.image_url||null,im=oldImage,f=$("#ii").files[0];
     if(f){saveStage(ui,"⏳ جاري رفع صورة الصنف…");im=await upload(f,"items")}
     saveStage(ui,"⏳ جاري حفظ بيانات الصنف…");
     let v={category_id:cat.id,name:$("#in").value.trim(),description:$("#id").value.trim(),price:+$("#ip").value||0,image_url:im,is_available:edit?edit.is_available!==false:true,is_active:edit?.is_active===false?false:true},
         q=edit?sb.from("menu_items").update(v).eq("id",edit.id):sb.from("menu_items").insert(v),
         {error}=await q;
     if(error)throw error;
+    if(f&&oldImage&&oldImage!==im)await removeStoredImage(oldImage);
     saveStage(ui,"✓ تم حفظ الصنف بنجاح");
     msg("✓ تم حفظ الصنف بنجاح");
     await loadItems();
@@ -334,7 +338,7 @@ async function saveItem(x){
     msg("خطأ: "+z.message);
   }
 }
-window.delItem=async id=>{if(!confirm("حذف الصنف؟"))return;let {error}=await sb.from("menu_items").delete().eq("id",id);error?msg(error.message):loadItems()};
+window.delItem=async id=>{if(!confirm("حذف الصنف؟"))return;const item=(cat?.items||[]).find(x=>String(x.id)===String(id));let {error}=await sb.from("menu_items").delete().eq("id",id);if(error)return msg(error.message);await removeStoredImage(item?.image_url);msg("✓ تم حذف الصنف وصورته");loadItems()};
 let restaurantOpen=true;
 async function loadRestaurantState(){let {data,error}=await sb.from("restaurant_settings").select("is_open").eq("id",1).single();if(error)return msg(error.message);restaurantOpen=data.is_open!==false;paintRestaurantState()}
 function paintRestaurantState(){let b=$("#restaurantState");b.textContent=restaurantOpen?"● مفتوح":"● مغلق";b.className="restaurant-state "+(restaurantOpen?"open":"closed")}
@@ -342,7 +346,7 @@ $("#restaurantState").onclick=async()=>{let next=!restaurantOpen,ok=await pretty
 $("#settingsBtn").onclick=()=>{if(!$("#settingsDrawer").classList.contains("hide"))return;$("#settingsDrawer").classList.remove("hide");loadSettings();history.pushState({view:"settings"},"","#settings")};
 function closeSettings(useHistory=true){$("#settingsDrawer").classList.add("hide");if(useHistory&&location.hash==="#settings")history.back()}
 $("#closeSettings").onclick=()=>closeSettings(true);$("#settingsDrawer").onclick=e=>{if(e.target===$("#settingsDrawer"))closeSettings(true)};
-async function loadSettings(){let {data,error}=await sb.from("restaurant_settings").select("*").eq("id",1).single();if(error)return msg(error.message);$("#rn").value=data.restaurant_name||"";$("#wa").value=data.whatsapp_number||"";$("#tag").value=data.tagline||"";$("#addr").value=data.address||""}
+async function loadSettings(){let {data,error}=await sb.from("restaurant_settings").select("*").eq("id",1).single();if(error)return msg(error.message);$("#rn").value=data.restaurant_name||"";$("#wa").value=data.whatsapp_number||""}
 $("#settingsForm").onsubmit=async x=>{x.preventDefault();let {error}=await sb.from("restaurant_settings").update({restaurant_name:$("#rn").value.trim(),whatsapp_number:$("#wa").value.trim(),tagline:$("#tag").value.trim(),address:$("#addr").value.trim(),updated_at:new Date().toISOString()}).eq("id",1);if(error)return msg(error.message);msg("✓ تم حفظ إعدادات المطعم");$("#settingsDrawer").classList.add("hide")};
 $("#unavailableStat").onclick=()=>loadUnavailable(true);
 $("#backUnavailable").onclick=()=>history.back();
