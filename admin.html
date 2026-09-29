@@ -146,7 +146,7 @@ linear-gradient(160deg,#f8f0e2 0%,#efe4d1 100%)}
 <header class="admin-top"><div class="admin-top-inner">
   <div class="admin-brand">دار الشام — الإدارة</div>
   <button id="restaurantState" class="restaurant-state open">● مفتوح</button>
-  <div class="admin-actions"><button id="settingsBtn" class="icon-btn">⚙ الإعدادات</button></div>
+  <div class="admin-actions"><button id="settingsBtn" class="icon-btn">☎ رقم واتس الطلبات</button></div>
 </div></header>
 <main class="wrap">
 <section id="menuPane"><div id="catsPane">
@@ -164,7 +164,7 @@ linear-gradient(160deg,#f8f0e2 0%,#efe4d1 100%)}
 <div id="unavailablePane" class="hide"><div class="card row between"><div><button id="backUnavailable" class="btn light">← الرئيسية</button><h2 style="margin:10px 0 0">الأصناف غير المتوفرة</h2><div class="muted">مرتبة حسب القسم</div></div></div><div id="unavailableList">تحميل…</div></div>
 </section>
 </main></section>
-<div id="settingsDrawer" class="settings-drawer hide"><aside class="settings-panel"><div class="drawer-head"><h2>إعدادات المطعم</h2><button id="closeSettings" class="icon-btn">✕</button></div><p class="muted">معلومات المطعم التي تظهر للزبائن.</p><form id="settingsForm"><div class="field"><label>اسم المطعم</label><input id="rn" required></div><div class="field"><label>رقم واتساب الطلبات</label><input id="wa" required></div><button class="btn gold" style="width:100%">حفظ الإعدادات</button></form></aside></div>
+<div id="settingsDrawer" class="settings-drawer hide"><aside class="settings-panel"><div class="drawer-head"><h2>رقم واتس الطلبات</h2><button id="closeSettings" class="icon-btn">✕</button></div><p class="muted">هذا الرقم يستقبل طلبات الزبائن. التعديل مقفول لتجنب تغييره بالخطأ.</p><form id="settingsForm"><div class="field"><label>رقم واتس الطلبات</label><input id="wa" inputmode="tel" autocomplete="off" disabled required></div><button id="unlockWa" class="btn light" type="button" style="width:100%;margin-bottom:10px">تعديل الرقم</button><button id="saveWa" class="btn gold hide" type="submit" style="width:100%">حفظ الرقم الجديد</button></form></aside></div>
 <div id="modal" class="modal hide"><div class="sheet"><div class="row between"><h2 id="mt"></h2><button id="mc" class="btn light">إغلاق</button></div><div id="mb"></div></div></div><div id="toast" class="toast hide"></div>
 <script>
 const sb=supabase.createClient("https://lliysaqadupzzvmokzrg.supabase.co","sb_publishable_QBLnIhsmwpyIY7P6tNNwFg_OxqKAmi5"),$=s=>document.querySelector(s);let cats=[],cat=null,edit=null;
@@ -346,8 +346,9 @@ $("#restaurantState").onclick=async()=>{let next=!restaurantOpen,ok=await pretty
 $("#settingsBtn").onclick=()=>{if(!$("#settingsDrawer").classList.contains("hide"))return;$("#settingsDrawer").classList.remove("hide");loadSettings();history.pushState({view:"settings"},"","#settings")};
 function closeSettings(useHistory=true){$("#settingsDrawer").classList.add("hide");if(useHistory&&location.hash==="#settings")history.back()}
 $("#closeSettings").onclick=()=>closeSettings(true);$("#settingsDrawer").onclick=e=>{if(e.target===$("#settingsDrawer"))closeSettings(true)};
-async function loadSettings(){let {data,error}=await sb.from("restaurant_settings").select("*").eq("id",1).single();if(error)return msg(error.message);$("#rn").value=data.restaurant_name||"";$("#wa").value=data.whatsapp_number||""}
-$("#settingsForm").onsubmit=async x=>{x.preventDefault();let {error}=await sb.from("restaurant_settings").update({restaurant_name:$("#rn").value.trim(),whatsapp_number:$("#wa").value.trim(),tagline:$("#tag").value.trim(),address:$("#addr").value.trim(),updated_at:new Date().toISOString()}).eq("id",1);if(error)return msg(error.message);msg("✓ تم حفظ إعدادات المطعم");$("#settingsDrawer").classList.add("hide")};
+async function loadSettings(){let {data,error}=await sb.from("restaurant_settings").select("whatsapp_number").eq("id",1).single();if(error)return msg(error.message);$("#wa").value=data.whatsapp_number||"";$("#wa").disabled=true;$("#unlockWa").classList.remove("hide");$("#saveWa").classList.add("hide")}
+$("#unlockWa").onclick=async()=>{const ok=await prettyConfirm("تعديل رقم واتس الطلبات","هذا الرقم يستقبل طلبات الزبائن. هل أنت متأكد أنك تريد فتح التعديل؟","نعم، فتح التعديل");if(!ok)return;$("#wa").disabled=false;$("#wa").focus();$("#unlockWa").classList.add("hide");$("#saveWa").classList.remove("hide")};
+$("#settingsForm").onsubmit=async x=>{x.preventDefault();const phone=$("#wa").value.trim();if(!phone)return msg("أدخل رقم واتس الطلبات");const ok=await prettyConfirm("حفظ رقم واتس جديد","سيتم استخدام هذا الرقم لاستقبال جميع طلبات الزبائن. هل تريد حفظه؟","نعم، حفظ الرقم");if(!ok)return;let {error}=await sb.from("restaurant_settings").update({whatsapp_number:phone,updated_at:new Date().toISOString()}).eq("id",1);if(error)return msg(error.message);msg("✓ تم حفظ رقم واتس الطلبات");$("#wa").disabled=true;$("#saveWa").classList.add("hide");$("#unlockWa").classList.remove("hide");setTimeout(()=>closeSettings(true),350)};
 $("#unavailableStat").onclick=()=>loadUnavailable(true);
 $("#backUnavailable").onclick=()=>history.back();
 window.makeAvailable=async(id)=>{
